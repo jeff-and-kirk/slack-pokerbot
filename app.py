@@ -14,12 +14,13 @@ from urlparse import parse_qs
 import json
 import urllib2
 import datetime
+from boto3.dynamodb.conditions import Attr
+
 
 # Start Configuration
 SLACK_TOKENS = (os.getenv('slack_token'))
 IMAGE_LOCATION = '<insert your image path> (e.g. http://www.my-site.com/images/)'
 COMPOSITE_IMAGE = []
-VALID_VOTES = {}
 SESSION_ESTIMATES = {}
 # End Configuration
 
@@ -28,6 +29,52 @@ logger.setLevel(logging.INFO)
 
 poker_data = {}
 
+VALID_SIZES = {
+    'f': {  # Fibonnaci
+        0: IMAGE_LOCATION + '0.png',
+        1: IMAGE_LOCATION + '1.png',
+        2: IMAGE_LOCATION + '2.png',
+        3: IMAGE_LOCATION + '3.png',
+        5: IMAGE_LOCATION + '5.png',
+        8: IMAGE_LOCATION + '8.png',
+        13: IMAGE_LOCATION + '13.png',
+        20: IMAGE_LOCATION + '20.png',
+        40: IMAGE_LOCATION + '40.png',
+        100: IMAGE_LOCATION + '100.png',
+        '?': IMAGE_LOCATION + 'unsure.png'
+    },
+    's': {  # simple Fib
+        1: IMAGE_LOCATION + '1.png',
+        3: IMAGE_LOCATION + '3.png',
+        5: IMAGE_LOCATION + '5.png',
+        8: IMAGE_LOCATION + '8.png',
+        '?': IMAGE_LOCATION + 'unsure.png'
+    },
+    't': {  # T-shirt size
+        's': IMAGE_LOCATION + 'small.png',
+        'm': IMAGE_LOCATION + 'medium.png',
+        'l': IMAGE_LOCATION + 'large.png',
+        'xl': IMAGE_LOCATION + 'extralarge.png',
+        '?': IMAGE_LOCATION + 'unsure.png',
+    },
+    'm': {  # man-hours
+        1: IMAGE_LOCATION + 'one.png',
+        2: IMAGE_LOCATION + 'two.png',
+        3: IMAGE_LOCATION + 'three.png',
+        4: IMAGE_LOCATION + 'four.png',
+        5: IMAGE_LOCATION + 'five.png',
+        6: IMAGE_LOCATION + 'six.png',
+        7: IMAGE_LOCATION + 'seven.png',
+        8: IMAGE_LOCATION + 'eight.png',
+        '2d': IMAGE_LOCATION + 'twod.png',
+        '3d': IMAGE_LOCATION + 'threed.png',
+        '4d': IMAGE_LOCATION + 'fourd.png',
+        '5d': IMAGE_LOCATION + 'fived.png',
+        '1.5w': IMAGE_LOCATION + 'weekhalf.png',
+        '2w': IMAGE_LOCATION + 'twow.png',
+        '?': IMAGE_LOCATION + 'unsure.png',
+    }
+}
 
 def lambda_handler(event, context):
     """The function that AWS Lambda is configured to run on POST request to the
@@ -62,70 +109,14 @@ def lambda_handler(event, context):
     sub_command = command_arguments[0]
 
     if sub_command == 'setup':
-
-        valid_sizes = {
-            'fibonacci': {
-                0: IMAGE_LOCATION + '0.png',
-                1: IMAGE_LOCATION + '1.png',
-                2: IMAGE_LOCATION + '2.png',
-                3: IMAGE_LOCATION + '3.png',
-                5: IMAGE_LOCATION + '5.png',
-                8: IMAGE_LOCATION + '8.png',
-                13: IMAGE_LOCATION + '13.png',
-                20: IMAGE_LOCATION + '20.png',
-                40: IMAGE_LOCATION + '40.png',
-                100: IMAGE_LOCATION + '100.png',
-                '?': IMAGE_LOCATION + 'unsure.png'
-            },
-            'simple_fibonacci': {
-                1: IMAGE_LOCATION + '1.png',
-                3: IMAGE_LOCATION + '3.png',
-                5: IMAGE_LOCATION + '5.png',
-                8: IMAGE_LOCATION + '8.png',
-                '?': IMAGE_LOCATION + 'unsure.png'
-            },
-            't_shirt_size': {
-                's': IMAGE_LOCATION + 'small.png',
-                'm': IMAGE_LOCATION + 'medium.png',
-                'l': IMAGE_LOCATION + 'large.png',
-                'xl': IMAGE_LOCATION + 'extralarge.png',
-                '?': IMAGE_LOCATION + 'unsure.png',
-            },
-            'man_hours': {
-                1: IMAGE_LOCATION + 'one.png',
-                2: IMAGE_LOCATION + 'two.png',
-                3: IMAGE_LOCATION + 'three.png',
-                4: IMAGE_LOCATION + 'four.png',
-                5: IMAGE_LOCATION + 'five.png',
-                6: IMAGE_LOCATION + 'six.png',
-                7: IMAGE_LOCATION + 'seven.png',
-                8: IMAGE_LOCATION + 'eight.png',
-                '2d': IMAGE_LOCATION + 'twod.png',
-                '3d': IMAGE_LOCATION + 'threed.png',
-                '4d': IMAGE_LOCATION + 'fourd.png',
-                '5d': IMAGE_LOCATION + 'fived.png',
-                '1.5w': IMAGE_LOCATION + 'weekhalf.png',
-                '2w': IMAGE_LOCATION + 'twow.png',
-                '?': IMAGE_LOCATION + 'unsure.png',
-            }
-        }
-
         if len(command_arguments) < 2:
             return create_ephemeral("You must enter a size format </pokerbot setup [f, s, t, m].")
 
         setup_sub_command = command_arguments[1]
 
-        sizes = {
-            'f': valid_sizes['fibonacci'],
-            's': valid_sizes['simple_fibonacci'],
-            't': valid_sizes['t_shirt_size'],
-            'm': valid_sizes['man_hours'],
-        }
-
-        if setup_sub_command not in sizes.keys():
+        if setup_sub_command not in VALID_SIZES.keys():
             return create_ephemeral("Your choices are f, s, t or m in format /pokerbot setup <choice>.")
 
-        VALID_VOTES.update(sizes[setup_sub_command])
         COMPOSITE_IMAGE.append(IMAGE_LOCATION + setup_sub_command + 'composite.png')
 
         table = dynamodb.Table("pokerbot_config")
@@ -145,19 +136,24 @@ def lambda_handler(event, context):
 
         table = dynamodb.Table("pokerbot_sessions")
 
+        channel = post_data['channel_name']
+        date = str(datetime.date.today())
+        key = channel + date
+
         response = table.update_item(
             Key={
-                'channel': post_data["channel_name"],
-                'date': datetime.date.today(),
+                'channeldate': key
             },
-            UpdateExpression="set start_time =:s",
+            UpdateExpression="set channel=:c, session_date=:d, start_time =:s",
             ExpressionAttributeValues={
-                ':s': datetime.datetime.now(),
+                ':c': channel,
+                ':d': date,
+                ':s': str(datetime.datetime.now()),
             },
             ReturnValues="UPDATED_NEW"
         )
 
-        return create_ephemeral("Your session is now being recorded, you can run deal command.")
+        return create_ephemeral("Your session is now being recorded, you can run the deal command.")
 
     elif sub_command == 'deal':  # pokerbot deal PRODENG-11521
         if post_data['team_id'] not in poker_data.keys():
@@ -178,18 +174,20 @@ def lambda_handler(event, context):
         return message.get_message()
 
     elif sub_command == 'vote':
-        if (post_data['team_id'] not in poker_data.keys() or
-                post_data['channel_id'] not in poker_data[post_data['team_id']].keys()):
-            return create_ephemeral("The poker planning game hasn't started yet.")
+       #  if (post_data['team_id'] not in poker_data.keys() or
+       #          post_data['channel_id'] not in poker_data[post_data['team_id']].keys()):
+       #      return create_ephemeral("The poker planning game hasn't started yet.")
 
         if len(command_arguments) < 2:
             return create_ephemeral("Your vote was not counted. You didn't enter a size.")
 
         vote_sub_command = command_arguments[1]
         vote = None
-
-        if vote not in VALID_VOTES:
-            return create_ephemeral("Your vote was not counted. Please enter a valid poker planning size.")
+        table = dynamodb.Table("pokerbot_config")
+        size = table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
+        valid_votes = VALID_SIZES[size].keys()
+        if vote not in valid_votes:
+            return create_ephemeral("Your vote was not counted. Please enter a valid poker planning size. One of: %s" % str(valid_votes))
 
         already_voted = poker_data[post_data['team_id']][post_data['channel_id']].has_key(post_data['user_id'])
 
