@@ -31,23 +31,23 @@ poker_data = {}
 
 VALID_SIZES = {
     'f': {  # Fibonnaci
-        0: IMAGE_LOCATION + '0.png',
-        1: IMAGE_LOCATION + '1.png',
-        2: IMAGE_LOCATION + '2.png',
-        3: IMAGE_LOCATION + '3.png',
-        5: IMAGE_LOCATION + '5.png',
-        8: IMAGE_LOCATION + '8.png',
-        13: IMAGE_LOCATION + '13.png',
-        20: IMAGE_LOCATION + '20.png',
-        40: IMAGE_LOCATION + '40.png',
-        100: IMAGE_LOCATION + '100.png',
+        '0': IMAGE_LOCATION + '0.png',
+        '1': IMAGE_LOCATION + '1.png',
+        '2': IMAGE_LOCATION + '2.png',
+        '3': IMAGE_LOCATION + '3.png',
+        '5': IMAGE_LOCATION + '5.png',
+        '8': IMAGE_LOCATION + '8.png',
+        '13': IMAGE_LOCATION + '13.png',
+        '20': IMAGE_LOCATION + '20.png',
+        '40': IMAGE_LOCATION + '40.png',
+        '100': IMAGE_LOCATION + '100.png',
         '?': IMAGE_LOCATION + 'unsure.png'
     },
     's': {  # simple Fib
-        1: IMAGE_LOCATION + '1.png',
-        3: IMAGE_LOCATION + '3.png',
-        5: IMAGE_LOCATION + '5.png',
-        8: IMAGE_LOCATION + '8.png',
+        '1': IMAGE_LOCATION + '1.png',
+        '3': IMAGE_LOCATION + '3.png',
+        '5': IMAGE_LOCATION + '5.png',
+        '8': IMAGE_LOCATION + '8.png',
         '?': IMAGE_LOCATION + 'unsure.png'
     },
     't': {  # T-shirt size
@@ -58,14 +58,14 @@ VALID_SIZES = {
         '?': IMAGE_LOCATION + 'unsure.png',
     },
     'm': {  # man-hours
-        1: IMAGE_LOCATION + 'one.png',
-        2: IMAGE_LOCATION + 'two.png',
-        3: IMAGE_LOCATION + 'three.png',
-        4: IMAGE_LOCATION + 'four.png',
-        5: IMAGE_LOCATION + 'five.png',
-        6: IMAGE_LOCATION + 'six.png',
-        7: IMAGE_LOCATION + 'seven.png',
-        8: IMAGE_LOCATION + 'eight.png',
+        '1': IMAGE_LOCATION + 'one.png',
+        '2': IMAGE_LOCATION + 'two.png',
+        '3': IMAGE_LOCATION + 'three.png',
+        '4': IMAGE_LOCATION + 'four.png',
+        '5': IMAGE_LOCATION + 'five.png',
+        '6': IMAGE_LOCATION + 'six.png',
+        '7': IMAGE_LOCATION + 'seven.png',
+        '8': IMAGE_LOCATION + 'eight.png',
         '2d': IMAGE_LOCATION + 'twod.png',
         '3d': IMAGE_LOCATION + 'threed.png',
         '4d': IMAGE_LOCATION + 'fourd.png',
@@ -181,12 +181,11 @@ def lambda_handler(event, context):
         if len(command_arguments) < 2:
             return create_ephemeral("Your vote was not counted. You didn't enter a size.")
 
-        vote_sub_command = command_arguments[1]
-        vote = None
+        vote = command_arguments[1]
         table = dynamodb.Table("pokerbot_config")
         size = table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
         valid_votes = VALID_SIZES[size].keys()
-        if vote not in valid_votes:
+        if str(vote) not in valid_votes:
             return create_ephemeral("Your vote was not counted. Please enter a valid poker planning size. One of: %s" % str(valid_votes))
 
         already_voted = poker_data[post_data['team_id']][post_data['channel_id']].has_key(post_data['user_id'])
