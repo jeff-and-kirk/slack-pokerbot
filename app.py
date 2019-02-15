@@ -174,9 +174,9 @@ def lambda_handler(event, context):
         return message.get_message()
 
     elif sub_command == 'vote':
-       #  if (post_data['team_id'] not in poker_data.keys() or
-       #          post_data['channel_id'] not in poker_data[post_data['team_id']].keys()):
-       #      return create_ephemeral("The poker planning game hasn't started yet.")
+        if (post_data['team_id'] not in poker_data.keys() or
+                post_data['channel_id'] not in poker_data[post_data['team_id']].keys()):
+            return create_ephemeral("The poker planning game hasn't started yet.")
 
         if len(command_arguments) < 2:
             return create_ephemeral("Your vote was not counted. You didn't enter a size.")
@@ -212,7 +212,9 @@ def lambda_handler(event, context):
         names = []
 
         for player in poker_data[post_data['team_id']][post_data['channel_id']]:
-            names.append(poker_data[post_data['team_id']][post_data['channel_id']][player]['name'])
+            if player != 'ticket':
+                player_name = poker_data[post_data['team_id']][post_data['channel_id']][player]['name']
+                names.append(player_name)
 
         if len(names) == 0:
             message = Message('No one has voted yet.')
@@ -247,16 +249,22 @@ def lambda_handler(event, context):
         vote_set = set(votes.keys())
 
         if len(vote_set) == 1:
-            estimate = VALID_VOTES.get(vote_set.pop())
-            message = Message('*Congratulations!*')
-            message.add_attachment('Everyone selected the same number.', 'good', estimate)
+            table = dynamodb.Table("pokerbot_config")
+            size = table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
+            estimate = vote_set.pop()
+            estimate_img = VALID_SIZES[size][estimate]
+            message = Message("""*Congratulations!*
+_{ticket}_: {estimate}""".format(ticket=ticket_number, estimate=estimate))
+            message.add_attachment('Everyone selected the same number.', 'good', estimate_img)
 
             table = dynamodb.Table("pokerbot_sessions")
+            channel = post_data['channel_name']
+            date = str(datetime.date.today())
+            key = channel + date
 
             response = table.update_item(
                 Key={
-                    'channel': post_data["channel_name"],
-                    'date': datetime.date.today(),
+                    'channeldate': key
                 },
                 UpdateExpression="set {} =:e".format(ticket_number),
                 ExpressionAttributeValues={
@@ -271,22 +279,24 @@ def lambda_handler(event, context):
             message = Message('*No winner yet.* Discuss and continue voting.')
 
             for vote in votes:
-                message.add_attachment(", ".join(votes[vote]), 'warning', VALID_VOTES[vote], True)
+                message.add_attachment(", ".join(votes[vote]), 'warning', VALID_SIZES[size][vote], True)
 
             return message.get_message()
 
     elif sub_command == 'end':
 
         table = dynamodb.Table("pokerbot_sessions")
+        channel = post_data['channel_name']
+        date = str(datetime.date.today())
+        key = channel + date
 
         response = table.update_item(
             Key={
-                'channel': post_data["channel_name"],
-                'date': datetime.date.today(),
+                'channeldate': key
             },
             UpdateExpression="set end_time =:s",
             ExpressionAttributeValues={
-                ':s': datetime.datetime.now(),
+                ':s': str(datetime.datetime.now()),
             },
             ReturnValues="UPDATED_NEW"
         )
