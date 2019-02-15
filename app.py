@@ -298,14 +298,33 @@ _{ticket}_: {estimate}""".format(ticket=ticket_number, estimate=estimate))
             ExpressionAttributeValues={
                 ':s': str(datetime.datetime.now()),
             },
-            ReturnValues="UPDATED_NEW"
+            ReturnValues="ALL_NEW"
         )
 
         message = Message('*Session has ended, see results below:*')
 
-        for item in response.Items:
-            message.add_attachment('{key}:{value}'.format(key=item, value=response.Items[item]), 'good')
+        metadata_keys = [
+            'session_date',
+            'start_time',
+            'end_time',
+        ]
+        ignored_keys = [
+            'channeldate',
+            'channel',
+        ]
 
+        metadata = "*Session Info*\n"
+        for key in metadata_keys:
+            metadata = metadata + '*{key}*: {value}\n'.format(key=key, value=response['Attributes'][key])
+            del response['Attributes'][key]
+
+        message.add_attachment(metadata, 'good')
+
+        for key in ignored_keys:
+            del response['Attributes'][key]
+
+        for key in response['Attributes']:
+            message.add_attachment('*{key}*: {value}'.format(key=key, value=response['Attributes'][key]), 'good')
         return message.get_message()
  
     elif sub_command == 'help':
