@@ -162,13 +162,13 @@ def lambda_handler(event, context):
         if len(command_arguments) < 2:
             return create_ephemeral("You did not enter a JIRA ticket number.")
 
-        ticket_number = command_arguments[1]
+        ticket_number = command_arguments[1].replace('-', '_')
 
         poker_data[post_data['team_id']][post_data['channel_id']] = {}
 
         poker_data[post_data['team_id']][post_data['channel_id']]['ticket'] = ticket_number
 
-        message = Message('*The planning poker game has started* for {}.'.format(ticket_number))
+        message = Message('*The planning poker game has started* for {}.'.format(ticket_number.replace('_', '-')))
         message.add_attachment('Vote by typing */pokerbot vote <size>*.', None, COMPOSITE_IMAGE)
 
         return message.get_message()
@@ -254,7 +254,7 @@ def lambda_handler(event, context):
             estimate = vote_set.pop()
             estimate_img = VALID_SIZES[size][estimate]
             message = Message("""*Congratulations!*
-_{ticket}_: {estimate}""".format(ticket=ticket_number, estimate=estimate))
+_{ticket}_: {estimate}""".format(ticket=ticket_number.replace('_', '-'), estimate=estimate))
             message.add_attachment('Everyone selected the same number.', 'good', estimate_img)
 
             table = dynamodb.Table("pokerbot_sessions")
@@ -315,7 +315,8 @@ _{ticket}_: {estimate}""".format(ticket=ticket_number, estimate=estimate))
 
         metadata = "*Session Info*\n"
         for key in metadata_keys:
-            metadata = metadata + '*{key}*: {value}\n'.format(key=key, value=response['Attributes'][key])
+            formatted_key = key.replace('_', ' ').title()
+            metadata = metadata + '*{key}*: {value}\n'.format(key=formatted_key, value=response['Attributes'][key])
             del response['Attributes'][key]
 
         message.add_attachment(metadata, 'good')
@@ -324,7 +325,8 @@ _{ticket}_: {estimate}""".format(ticket=ticket_number, estimate=estimate))
             del response['Attributes'][key]
 
         for key in response['Attributes']:
-            message.add_attachment('*{key}*: {value}'.format(key=key, value=response['Attributes'][key]), 'good')
+            formatted_key = key.replace('_', '-')
+            message.add_attachment('*{key}*: {value}'.format(key=formatted_key, value=response['Attributes'][key]), 'good')
         return message.get_message()
  
     elif sub_command == 'help':
