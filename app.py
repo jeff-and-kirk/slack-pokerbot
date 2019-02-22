@@ -132,37 +132,37 @@ def lambda_handler(event, context):
             ReturnValues="UPDATED_NEW"
         )
 
-    elif sub_command == 'start':
-
-        table = dynamodb.Table("pokerbot_sessions")
-
-        channel = post_data['channel_name']
-        date = str(datetime.date.today())
-        key = channel + date
-
-        response = table.update_item(
-            Key={
-                'channeldate': key
-            },
-            UpdateExpression="set channel=:c, session_date=:d, start_time =:s",
-            ExpressionAttributeValues={
-                ':c': channel,
-                ':d': date,
-                ':s': str(datetime.datetime.now()),
-            },
-            ReturnValues="UPDATED_NEW"
-        )
-
-        return create_ephemeral("Your session is now being recorded, you can run the deal command.")
-
     elif sub_command == 'deal':  # pokerbot deal PRODENG-11521
         if post_data['team_id'] not in poker_data.keys():
             poker_data[post_data['team_id']] = {}
 
         if len(command_arguments) < 2:
-            return create_ephemeral("You did not enter a JIRA ticket number.")
+            return create_ephemeral("You did not enter a JIRA ticket number. ex: /pokerbot deal PROJECT-1234")
 
         ticket_number = command_arguments[1].replace('-', '_')
+
+        table = dynamodb.Table("pokerbot_sessions")
+        channel = post_data['channel_name']
+        date = str(datetime.date.today())
+        key = channel + date
+
+        response = table.scan(
+            FilterExpression=Attr('channeldate').contains(key)
+        )
+
+        if response['Count'] == 0:
+            response = table.update_item(
+                Key={
+                    'channeldate': key
+                },
+                UpdateExpression="set channel=:c, session_date=:d, start_time =:s",
+                ExpressionAttributeValues={
+                    ':c': channel,
+                    ':d': date,
+                    ':s': str(datetime.datetime.now()),
+                },
+                ReturnValues="UPDATED_NEW"
+            )
 
         poker_data[post_data['team_id']][post_data['channel_id']] = {}
 
