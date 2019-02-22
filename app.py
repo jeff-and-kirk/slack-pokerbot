@@ -19,8 +19,7 @@ from boto3.dynamodb.conditions import Attr
 
 # Start Configuration
 SLACK_TOKENS = (os.getenv('slack_token'))
-IMAGE_LOCATION = '<insert your image path> (e.g. http://www.my-site.com/images/)'
-COMPOSITE_IMAGE = []
+IMAGE_LOCATION = (os.getenv('image_location'))
 SESSION_ESTIMATES = {}
 # End Configuration
 
@@ -28,6 +27,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 poker_data = {}
+
+SIZES_TO_NAMES = {
+    'e': 'Engineering Hours',
+    'f': 'Fibonnaci Scale',
+    's': 'Simplified Fibonnaci',
+    't': 'T-Shirt Size',
+}
 
 VALID_SIZES = {
     'f': {  # Fibonnaci
@@ -57,7 +63,7 @@ VALID_SIZES = {
         'xl': IMAGE_LOCATION + 'extralarge.png',
         '?': IMAGE_LOCATION + 'unsure.png',
     },
-    'm': {  # man-hours
+    'e': {  # engineer-hours
         '1': IMAGE_LOCATION + 'one.png',
         '2': IMAGE_LOCATION + 'two.png',
         '3': IMAGE_LOCATION + 'three.png',
@@ -110,14 +116,12 @@ def lambda_handler(event, context):
 
     if sub_command == 'setup':
         if len(command_arguments) < 2:
-            return create_ephemeral("You must enter a size format </pokerbot setup [f, s, t, m].")
+            return create_ephemeral("You must enter a size format: `/pokerbot setup [f, s, t, e]`.")
 
-        setup_sub_command = command_arguments[1]
+        size = command_arguments[1]
 
-        if setup_sub_command not in VALID_SIZES.keys():
-            return create_ephemeral("Your choices are f, s, t or m in format /pokerbot setup <choice>.")
-
-        COMPOSITE_IMAGE.append(IMAGE_LOCATION + setup_sub_command + 'composite.png')
+        if size not in VALID_SIZES.keys():
+            return create_ephemeral("Your choices are f, s, t or e in format /pokerbot setup <choice>.")
 
         table = dynamodb.Table("pokerbot_config")
 
@@ -127,10 +131,14 @@ def lambda_handler(event, context):
             },
             UpdateExpression="set size =:s",
             ExpressionAttributeValues={
-                ':s': setup_sub_command,
+                ':s': size,
             },
             ReturnValues="UPDATED_NEW"
         )
+
+        message = Message('*Channel Estimation size set to {}*'.format(SIZES_TO_NAMES[size]))
+        message.add_attachment('Valid Estimate Sizes are Below', None, IMAGE_LOCATION + size + "composite.png")
+        return message.get_message()
 
     elif sub_command == 'deal':  # pokerbot deal PRODENG-11521
         if post_data['team_id'] not in poker_data.keys():
@@ -168,8 +176,12 @@ def lambda_handler(event, context):
 
         poker_data[post_data['team_id']][post_data['channel_id']]['ticket'] = ticket_number
 
+        # Get Composite Image prefix
+        size_table = dynamodb.Table("pokerbot_config")
+        size = size_table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
+
         message = Message('*The planning poker game has started* for {}.'.format(ticket_number.replace('_', '-')))
-        message.add_attachment('Vote by typing */pokerbot vote <size>*.', None, COMPOSITE_IMAGE)
+        message.add_attachment('Vote by typing */pokerbot vote <size>*.', None, IMAGE_LOCATION + size + "composite.png")
 
         return message.get_message()
 
