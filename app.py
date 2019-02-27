@@ -344,10 +344,9 @@ _{ticket}_: {estimate}""".format(ticket=ticket_number.replace('_', '-'), estimat
     elif sub_command == 'help':
         return create_ephemeral('Pokerbot helps you play Agile/Scrum poker planning.\n\n' +
                                 'Use the following commands:\n' +
-                                ' /pokerbot setup\n' +
-                                ' /pokerbot start\n' +
-                                ' /pokerbot deal\n' +
-                                ' /pokerbot vote\n' +
+                                ' /pokerbot setup <size in f, s, t or e>\n' +
+                                ' /pokerbot deal <JIRA Ticket ID>\n' +
+                                ' /pokerbot vote <valid size or ?>\n' +
                                 ' /pokerbot tally\n' +
                                 ' /pokerbot reveal\n' +
                                 ' /pokerbot end')
