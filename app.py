@@ -144,13 +144,23 @@ def lambda_handler(event, context):
         if post_data['team_id'] not in poker_data.keys():
             poker_data[post_data['team_id']] = {}
 
+        # a validation to ensure channel size config was setup prior to issueing a deal
+        config = dynamodb.Table("pokerbot_config")
+        channel = post_data['channel_name']
+
+        response = config.scan(
+            FilterExpression=Attr('channel').contains(channel)
+        )
+
+        if response['Count'] == 0:
+            return create_ephemeral("Setup channel for size configuration first. ex: /pokerbot setup <size>.")
+
         if len(command_arguments) < 2:
             return create_ephemeral("You did not enter a JIRA ticket number. ex: /pokerbot deal PROJECT-1234")
 
         ticket_number = command_arguments[1].replace('-', '_')
 
         table = dynamodb.Table("pokerbot_sessions")
-        channel = post_data['channel_name']
         date = str(datetime.date.today())
         key = channel + date
 
