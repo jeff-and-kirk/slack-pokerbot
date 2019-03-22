@@ -20,6 +20,9 @@ from boto3.dynamodb.conditions import Attr
 # Start Configuration
 SLACK_TOKENS = (os.getenv('slack_token'))
 IMAGE_LOCATION = (os.getenv('image_location'))
+BOT_ENVIRONMENT = (os.getenv('bot_environment'))
+SESSIONS_TABLE = "pokerbot-sessions--{}".format(BOT_ENVIRONMENT)
+CONFIG_TABLE = "pokerbot-config--{}".format(BOT_ENVIRONMENT)
 SESSION_ESTIMATES = {}
 # End Configuration
 
@@ -123,7 +126,7 @@ def lambda_handler(event, context):
         if size not in VALID_SIZES.keys():
             return create_ephemeral("Your choices are f, s, t or e in format /pokerbot setup <choice>.")
 
-        table = dynamodb.Table("pokerbot_config")
+        table = dynamodb.Table(CONFIG_TABLE)
 
         response = table.update_item(
             Key={
@@ -145,7 +148,7 @@ def lambda_handler(event, context):
             poker_data[post_data['team_id']] = {}
 
         # a validation to ensure channel size config was setup prior to issueing a deal
-        config = dynamodb.Table("pokerbot_config")
+        config = dynamodb.Table(CONFIG_TABLE)
         channel = post_data['channel_name']
 
         response = config.scan(
@@ -160,7 +163,7 @@ def lambda_handler(event, context):
 
         ticket_number = command_arguments[1].replace('-', '_')
 
-        table = dynamodb.Table("pokerbot_sessions")
+        table = dynamodb.Table(SESSIONS_TABLE)
         date = str(datetime.date.today())
         key = channel + date
 
@@ -187,7 +190,7 @@ def lambda_handler(event, context):
         poker_data[post_data['team_id']][post_data['channel_id']]['ticket'] = ticket_number
 
         # Get Composite Image prefix
-        size_table = dynamodb.Table("pokerbot_config")
+        size_table = dynamodb.Table(CONFIG_TABLE)
         size = size_table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
 
         message = Message('*The planning poker game has started* for {}.'.format(ticket_number.replace('_', '-')))
@@ -204,7 +207,7 @@ def lambda_handler(event, context):
             return create_ephemeral("Your vote was not counted. You didn't enter a size.")
 
         vote = command_arguments[1]
-        table = dynamodb.Table("pokerbot_config")
+        table = dynamodb.Table(CONFIG_TABLE)
         size = table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
         valid_votes = VALID_SIZES[size].keys()
         if str(vote) not in valid_votes:
@@ -271,7 +274,7 @@ def lambda_handler(event, context):
         vote_set = set(votes.keys())
 
         if len(vote_set) == 1:
-            table = dynamodb.Table("pokerbot_config")
+            table = dynamodb.Table(CONFIG_TABLE)
             size = table.scan(FilterExpression=Attr('channel').eq(post_data['channel_name']))['Items'][0]['size']
             estimate = vote_set.pop()
             estimate_img = VALID_SIZES[size][estimate]
@@ -279,7 +282,7 @@ def lambda_handler(event, context):
 _{ticket}_: {estimate}""".format(ticket=ticket_number.replace('_', '-'), estimate=estimate))
             message.add_attachment('Everyone selected the same number.', 'good', estimate_img)
 
-            table = dynamodb.Table("pokerbot_sessions")
+            table = dynamodb.Table(SESSIONS_TABLE)
             channel = post_data['channel_name']
             date = str(datetime.date.today())
             key = channel + date
@@ -307,7 +310,7 @@ _{ticket}_: {estimate}""".format(ticket=ticket_number.replace('_', '-'), estimat
 
     elif sub_command == 'end':
 
-        table = dynamodb.Table("pokerbot_sessions")
+        table = dynamodb.Table(SESSIONS_TABLE)
         channel = post_data['channel_name']
         date = str(datetime.date.today())
         key = channel + date
